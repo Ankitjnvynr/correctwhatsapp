@@ -47,24 +47,62 @@ router.post('/api/send-message', async (req, res) => {
 });
 
 // Media route
+// Media route
 router.post('/api/send-media', upload.single('file'), async (req, res) => {
     const { number, caption } = req.body;
-    const filePath = req.file.path;
+
+    // Validate file upload
+    if (!req.file) {
+        return res.status(400).json({ success: false, error: 'No media file provided.' });
+    }
+
+    const filePath = path.resolve(req.file.path); // Ensure absolute path
 
     try {
         const client = getClient();
         const chatId = `${number}@c.us`;
+        console.log(`Sending media to: ${chatId}, file: ${filePath}, caption: ${caption}`);
+
+        // Check if file exists before sending
+        if (!fs.existsSync(filePath)) {
+            console.error(`File does not exist at path: ${filePath}`);
+            return res.status(500).json({ success: false, error: 'Uploaded file is missing.' });
+        }
+
+        // Send the media file
         await client.sendFile(chatId, filePath, req.file.originalname, caption || '');
+
+        // Save media details in the database
+        const db = getDb();
+        const mediaCollection = db.collection('media_logs');
+        await mediaCollection.insertOne({
+            number,
+            caption,
+            fileName: req.file.originalname,
+            filePath: "../uploads",
+            sentAt: new Date(),
+        });
+
         res.status(200).json({ success: true, message: 'Media sent successfully!' });
     } catch (error) {
         console.error('Error sending media:', error);
-        res.status(500).json({ success: false, error: 'Failed to send media.' });
+        res.status(500).json({ success: false, error: 'Failed to send media file. Please check the format or connection.' });
     } finally {
-        fs.unlink(filePath, (err) => {
-            if (err) console.error('Error deleting uploaded file:', err);
+        // Delete the file after sending
+        fs.access(filePath, fs.constants.F_OK, (err) => {
+            if (!err) {
+                fs.unlink(filePath, (unlinkErr) => {
+                    if (unlinkErr) console.error('Error deleting uploaded file:', unlinkErr);
+                });
+            } else {
+                console.error('File does not exist, skipping deletion:', filePath);
+            }
         });
     }
 });
+
+
+
 
 // Bulk messages
 router.post('/api/send-bulk-messages', async (req, res) => {
@@ -106,7 +144,7 @@ router.get('/api/get-qr-code', async (req, res) => {
 });
 
 // Schedule messages route
-router.post('/api/schedule-message', (req, res) => {
+router.post('/api/schedule-message', async (req, res) => {
     const { number, message, scheduledTime } = req.body;
     const scheduleDate = new Date(scheduledTime);
 
@@ -114,17 +152,23 @@ router.post('/api/schedule-message', (req, res) => {
         return res.status(400).json({ success: false, error: 'Invalid scheduled time format.' });
     }
 
-    schedule.scheduleJob(scheduleDate, async () => {
-        try {
-            const client = getClient();
-            const chatId = `${number}@c.us`;
-            await client.sendText(chatId, message);
-        } catch (error) {
-            console.error('Error sending scheduled message:', error);
-        }
-    });
+    try {
+        schedule.scheduleJob(scheduleDate, async () => {
+            try {
+                const client = getClient();
+                const chatId = `${number}@c.us`;
+                await client.sendText(chatId, message);
+                console.log(`Scheduled message sent to ${number} at ${new Date()}`);
+            } catch (error) {
+                console.error('Error sending scheduled message:', error);
+            }
+        });
 
-    res.status(200).json({ success: true, message: 'Message scheduled successfully!' });
+        res.status(200).json({ success: true, message: 'Message scheduled successfully!' });
+    } catch (error) {
+        console.error('Error scheduling message:', error);
+        res.status(500).json({ success: false, error: 'Failed to schedule message.' });
+    }
 });
 
 router.post('/api/logout', async (req, res) => {

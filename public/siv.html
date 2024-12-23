@@ -39,7 +39,7 @@
         <h2>QR Code for WhatsApp Login</h2>
         <img id="qrCodeImage" src="" alt="Scan QR Code to Login" style="max-width: 100%;" />
     </div>
-   
+
     <button id="generateQRButton">newqr</button>
 
     <button id="logoutButton" style="margin-top: 20px; background-color: red; color: white; border: none; padding: 10px; cursor: pointer;">Logout</button>
@@ -82,13 +82,13 @@
         <h2>Send Media File</h2>
         <label for="mediaNumber">Phone Numbers (comma-separated with country code):</label>
         <textarea id="mediaNumber" placeholder="e.g., 1234567890,2345678901" required></textarea>
-
+    
         <label for="mediaCaption">Caption (optional):</label>
         <input type="text" id="mediaCaption" placeholder="Enter a caption for the media file" />
-
+    
         <label for="mediaFile">Select Media File:</label>
         <input type="file" id="mediaFile" accept="image/*,video/*" required />
-
+    
         <button type="submit">Send Media File</button>
     </form>
 
@@ -194,12 +194,12 @@
             const fileInput = document.getElementById('mediaFile').files[0];
 
             const formData = new FormData();
-            formData.append('numbers', numbers);
+            formData.append('number', numbers);
             formData.append('caption', caption);
             formData.append('file', fileInput);
 
             try {
-                const response = await fetch('/api/send-bulk-media', {
+                const response = await fetch('/api/send-media', {
                     method: 'POST',
                     body: formData,
                 });
@@ -214,24 +214,56 @@
             }
         });
 
-
         const generateQRButton = document.getElementById('generateQRButton');
 
-generateQRButton.addEventListener('click', async () => {
-    try {
-        const response = await fetch('/api/generate-new-qr', { method: 'POST' });
-        const data = await response.json();
-        if (data.success) {
-            alert('New QR code generated successfully!');
-            fetchQRCode(); // Refresh the QR code
-        } else {
-            alert('Failed to generate new QR code.');
+        generateQRButton.addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/generate-new-qr', { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    alert('New QR code generated successfully!');
+                    fetchQRCode(); // Refresh the QR code
+                } else {
+                    alert('Failed to generate new QR code.');
+                }
+            } catch (error) {
+                console.error('Error generating new QR code:', error);
+                alert('Error generating new QR code.');
+            }
+        });
+   // Send Media File Handler
+   document.getElementById('mediaForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+
+        const number = document.getElementById('mediaNumber').value.trim();
+        const caption = document.getElementById('mediaCaption').value.trim();
+        const fileInput = document.getElementById('mediaFile').files[0];
+
+        if (!fileInput) {
+            alert('Please select a media file.');
+            return;
         }
-    } catch (error) {
-        console.error('Error generating new QR code:', error);
-        alert('Error generating new QR code.');
-    }
-});
+
+        const formData = new FormData();
+        formData.append('number', number);
+        formData.append('caption', caption);
+        formData.append('file', fileInput);
+
+        try {
+            const response = await fetch('/api/send-media', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+            document.getElementById('response').textContent = data.success
+                ? 'Media file sent successfully!'
+                : `Error: ${data.error}`;
+        } catch (error) {
+            console.error('Error sending media file:', error);
+            document.getElementById('response').textContent = 'Failed to send media file due to an unexpected error.';
+        }
+    });
 
     </script>
 </body>
